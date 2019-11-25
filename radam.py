@@ -28,7 +28,7 @@ class RAdam(Optimizer):
         super(RAdam, self).__init__(**kwargs)
         with K.name_scope(self.__class__.__name__):
             self.iterations = K.variable(0, dtype='int64', name='iterations')
-            self.learning_rate = K.variable(learning_rate, name='learning_rate')
+            self.lr = K.variable(learning_rate, name='learning_rate')
             self.beta_1 = K.variable(beta_1, name='beta_1')
             self.beta_2 = K.variable(beta_2, name='beta_2')
 
@@ -37,7 +37,7 @@ class RAdam(Optimizer):
         grads = self.get_gradients(loss, params)
         self.updates = [K.update_add(self.iterations, 1)]
 
-        lr = self.learning_rate
+        lr = self.lr
         t = K.cast(self.iterations, K.floatx()) + 1
         lr_t = lr / (1. - K.pow(self.beta_1, t))
 
@@ -83,7 +83,7 @@ class RAdam(Optimizer):
         return self.updates
 
     def get_config(self):
-        config = {'learning_rate': float(K.get_value(self.learning_rate)),
+        config = {'learning_rate': float(K.get_value(self.lr)),
                   'beta_1': float(K.get_value(self.beta_1)),
                   'beta_2': float(K.get_value(self.beta_2)),
                   'epsilon': self.epsilon}
