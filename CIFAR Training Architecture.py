@@ -11,7 +11,7 @@ import argparse
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-def createModel(args):
+def createModel(args, opt):
     numNodes = [9, 18, 36, 72, 144, 288, 576]
     k = (args.kernel_size * 2) + 1
 
@@ -42,7 +42,6 @@ def createModel(args):
     model.add(Dense(100, activation='softmax'))                                     #       Dense 2 (FC)
 
     print(model.summary())
-    opt = RAdam(min_lr=args.learning_rate)
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
 
     return model
@@ -87,7 +86,7 @@ def train(args):
     ## Prepare data
     print("Loading data..." + '\n')
     (trainX, trainF), (testX, testF) = cifar100.load_data(label_mode='fine')
-    (_, trainC), (_, testC) = cifar100.load_data(label_mode='coarse')
+    (_,      trainC), (_,     testC) = cifar100.load_data(label_mode='coarse')
 
     trainX = trainX.astype("float32") / 255.0
     testX = testX.astype("float32") / 255.0
@@ -104,21 +103,21 @@ def train(args):
     trainPath = args.save_dir
     if trainPath[-1] != '/':
         trainPath += '/'
-    modelPath = trainPath + args.model_name
 
-    ## Create model architecture
-    model = createModel(args)
 
-    ## Create callbacks and train model
-    checkpointer = ModelCheckpoint(filepath=modelPath, monitor='val_acc', verbose=1, save_best_only=True)
-    earlyStop = EarlyStopping(monitor='val_acc', patience=10)
-    H = model.fit(x=trainX, y=trainF, validation_data=(valX, valF), batch_size=batchSize, epochs=args.epochs, verbose=1,
-                            callbacks=[checkpointer, earlyStop], shuffle=True)
+    optimizers = {"RAdam": RAdam(min_lr=args.learning_rate), "Adam": Adam(lr=args.learning_rate), "SGD": SGD(lr=args.learning_rate)}
+    for optimizer, opt_object in optimizers.items():
+        modelPath = trainPath + "bestModel{}.hdf5".format(optimizer)
+        checkpointer = ModelCheckpoint(filepath=modelPath, monitor='val_acc', verbose=1, save_best_only=True)
+        earlyStop = EarlyStopping(monitor='val_acc', patience=10)
 
-    ## Load best-epoch weights and run analyses on test set
-    model.load_weights(modelPath)
-    predictions = model.predict(testX, batch_size=batchSize)
-    getAccuracy(predictions)
+        model = createModel(args, opt_object)
+        H = model.fit(x=trainX, y=trainF, validation_data=(valX, valF), batch_size=batchSize, epochs=args.epochs,
+                              verbose=1, callbacks=[checkpointer, earlyStop], shuffle=True)
+        print("{} hist size: {}".format(optimizer, H.shape))
+        model.load_weights(modelPath)
+        predictions = model.predict(testX, batch_size=batchSize)
+        getAccuracy(predictions, testF, testC)
 
     ############ Visualizing training history #################
     plt.style.use("ggplot")
@@ -142,6 +141,7 @@ def getAccuracy(preds, testF, testC):
     fineCount, coarseCount = 0, 0
     map = labelMap()
     for idx, p in enumerate(preds):
+        print(p)
         if p == np.argmax(testF[idx,:]):
             fineCount += 1
         if map[p] == testC[idx]:
@@ -155,7 +155,7 @@ def getAccuracy(preds, testF, testC):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-e', '--epochs',        type=int,    default=100,                 help='Max number of epochs')
+    parser.add_argument('-e', '--epochs',        type=int,    default=3,                  help='Max number of epochs')
     parser.add_argument('-b', '--batch-size',    type=int,    default=64,                  help='Number of images per batch.')
     parser.add_argument('-l', '--learning-rate', type=float,  default=0.00001,             help='Learning rate for RAdam optimizer.')
     parser.add_argument('-c', '--dropout-conv',  type=float,  default=0.1,                 help='Dropout rate applied after Conv layers. Range: 0-0.15')
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     parser.add_argument('-g', '--gauss-noise',   type=float,  default=0.01,                help='Amount of gaussian noise applied to input image.')
     parser.add_argument('-k', '--kernel-size',   type=int,    default=1,                   help='Actual Kernel Size = (kernel_size * 2) + 1. Range: 1-3')
     parser.add_argument('-m', '--model-name',    type=str,    default="bestModel100.hdf5", help='Name of model file')
-    parser.add_argument('-p', '--save-dir',      type=str,    default="C:/Users/Cameron/PycharmProjects/EECS545_Project/",
+    parser.add_argument('-p', '--save-dir',      type=str,    default="/home/ubuntu//",
                         help='Directory to save model file and history plot')
 
     (args, _) = parser.parse_known_args()
