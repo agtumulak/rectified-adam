@@ -6,10 +6,13 @@ from keras.models import Sequential
 from keras.datasets import cifar100
 import matplotlib.pyplot as plt
 from keras_radam import RAdam
+import tensorflow as tf
 import numpy as np
 import argparse
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+import logging, os
+logging.disable(logging.WARNING)
+tf.logging.set_verbosity(tf.logging.ERROR)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 def createModel(args, opt):
     numNodes = [9, 18, 36, 72, 144, 288, 576]
@@ -41,7 +44,7 @@ def createModel(args, opt):
     model.add(Dropout(args.dropout_dense))                                          #       Dropout 3
     model.add(Dense(100, activation='softmax'))                                     #       Dense 2 (FC)
 
-    print(model.summary())
+    #print(model.summary())
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
 
     return model
@@ -104,6 +107,10 @@ def train(args):
     if trainPath[-1] != '/':
         trainPath += '/'
 
+    train_loss = ([0] * args.epochs)
+    train_acc = np.copy(train_loss)
+    val_loss = np.copy(train_loss)
+    val_acc = np.copy(train_loss)
 
     optimizers = {"RAdam": RAdam(min_lr=args.learning_rate), "Adam": Adam(lr=args.learning_rate), "SGD": SGD(lr=args.learning_rate)}
     for optimizer, opt_object in optimizers.items():
@@ -114,10 +121,13 @@ def train(args):
         model = createModel(args, opt_object)
         H = model.fit(x=trainX, y=trainF, validation_data=(valX, valF), batch_size=batchSize, epochs=args.epochs,
                               verbose=1, callbacks=[checkpointer, earlyStop], shuffle=True)
-        print("{} hist size: {}".format(optimizer, H.shape))
+        train_loss = np.vstack((train_loss, H.history["loss"]))
+        train_acc = np.vstack((train_acc, H.history["acc"]))
+        val_loss = np.vstack((val_loss, H.history["val_loss"]))
+        val_acc = np.vstack((val_acc, H.history["val_acc"]))
         model.load_weights(modelPath)
-        predictions = model.predict(testX, batch_size=batchSize)
-        getAccuracy(predictions, testF, testC)
+        predictions = model.predict(testX, batch_size=batchSize)                    # (10000,100)
+        getAccuracy(predictions, testF, testC, optimizer)
 
     ############ Visualizing training history #################
     plt.style.use("ggplot")
@@ -130,27 +140,42 @@ def train(args):
     plt.xlabel("Epoch #")
     plt.ylabel("Loss/Accuracy")
     plt.legend(loc="lower left")
-    plt.savefig(trainPath + "accuracyAndLoss.jpg")
 
-    print("Predicting off of best epoch....")
+
+    plt.figure(2)
+    plt.plot(train_loss, label="Train Loss")
+    plt.plot(val_loss, label="Val Loss")
+    plt.xlabel("Epoch #")
+    plt.ylabel("Loss/Accuracy")
+    plt.legend(loc="lower left")
+    plt.savefig(trainPath + "loss.jpg")
+
+    plt.figure(3)
+    plt.plot(train_acc, label="Train Accuracy")
+    plt.plot(val_acc, label="Val Accuracy")
+    plt.xlabel("Epoch #")
+    plt.ylabel("Loss/Accuracy")
+    plt.legend(loc="lower left")
+    plt.savefig(trainPath + "accuracy.jpg")
+
     plt.show()
     ###########################################################
 
-def getAccuracy(preds, testF, testC):
+def getAccuracy(preds, testF, testC, optName):
     totalCount = len(preds)
     fineCount, coarseCount = 0, 0
     map = labelMap()
     for idx, p in enumerate(preds):
-        print(p)
-        if p == np.argmax(testF[idx,:]):
+        if np.argmax(p) == np.argmax(testF[idx,:]):
             fineCount += 1
-        if map[p] == testC[idx]:
+        if map[np.argmax(p)] == testC[idx]:
             coarseCount += 1
 
     fineAcc = fineCount / totalCount
     coarseAcc = coarseCount / totalCount
-    print("Accuracy on Fine Labels: {}%".format(np.round(fineAcc * 100, decimals=2)))
-    print("Accuracy on Coarse Labels: {}%".format(np.round(coarseAcc * 100, decimals=2)))
+    print(" ----- {} accuracy on Fine Labels: {}%".format(optName, np.round(fineAcc * 100, decimals=2)))
+    print(" ----- {} accuracy on Coarse Labels: {}%".format(optName, np.round(coarseAcc * 100, decimals=2)))
+    print('\n')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
