@@ -143,6 +143,7 @@ def grad_use(weights):
 #df = df.loc[~df.duplicated(subset=['date', 'symbol']),:] # drop duplicates
 #df = df.pivot(index='date', columns='symbol', values='close')
 #print(df)
+
 data = pd.read_csv("history_60d.csv")
 endData = data.loc[data['date'] == '2019-04-18']
 closeData = endData[['close']]
@@ -150,19 +151,15 @@ closeData = pd.DataFrame.to_numpy(endData.get("close"))
 openData = pd.DataFrame.to_numpy(endData.get("open"))
 #percent rate of return
 rateOfReturnVector = 100*(closeData - openData)/openData
-rateOfReturnVector = rateOfReturnVector[:10]
+rateOfReturnVector = rateOfReturnVector[:5]
 mean = np.dot(np.ones(rateOfReturnVector.size),rateOfReturnVector)/rateOfReturnVector.size
 #covariance = np.matmul((rateOfReturnVector - mean).T, (rateOfReturnVector - mean))/mean
-c = rateOfReturnVector - mean
+c = rateOfReturnVector - mean #THIS IS THE WRONG MEAN. WILL NEED TO DEFINE A LOOP TO MAKE A NEW VECTOR TO GO THROUGH TIME SERIES AND FIND AVERAGE RETURN
+##cmean = np.dot(np.ones(c.size),c)/c
 covariance = np.outer(c, c)/rateOfReturnVector.size
 portfolioWeights = np.ones(rateOfReturnVector.size)/rateOfReturnVector.size
-for x in range(10):
-    portfolioWeights[x] = 0.5
-portfolioWeights[6] = .2
-portfolioWeights[9] = .4
 #portfolioWeights[.05, .05, .05, .05, .05, .05, .2, .05, .05, .4]
-weights = portfolioWeights
-lossFunction = (1/2)*(portfolioWeights.T@covariance@portfolioWeights)
+#lossFunction = (1/2)*(portfolioWeights.T@covariance@portfolioWeights)
 def loss(w):
     return (1/2)*(w.T@covariance@w)
 def c1(w):
@@ -172,24 +169,31 @@ def c2(w):
     return w.T@rateOfReturnVector - a0
 constraint = [{'type':'eq', 'fun': c1},{'type':'eq', 'fun': c2}]
 #gradient = covariance@weights
-niters = 50000
+#niters = 50000
 y = sci.minimize(loss,portfolioWeights,constraints = constraint)
 y = y['x']
-print(np.ones(weights.size)@y)
+print(np.ones(portfolioWeights.size)@y)
 print(y@rateOfReturnVector)
 
-a = rateOfReturnVector.T@covariance@rateOfReturnVector
-b = rateOfReturnVector.T@covariance@np.ones(rateOfReturnVector.size)
-c = np.ones(rateOfReturnVector.size).T@covariance@np.ones(rateOfReturnVector.size)
+a = rateOfReturnVector.T@np.linalg.pinv(covariance)@rateOfReturnVector
+b = rateOfReturnVector.T@np.linalg.pinv(covariance)@np.ones(rateOfReturnVector.size)
+cc = np.ones(rateOfReturnVector.size).T@np.linalg.pinv(covariance)@np.ones(rateOfReturnVector.size)
 matPreInv = np.arange(4).astype(float)
-matPreInv = [a, b, b, c]
+matPreInv = [a, b, b, cc]
 matPreInv = np.reshape(matPreInv, (2, 2))
-matPostInv = np.linalg.inv(matPreInv)
+matPostInv = np.linalg.pinv(matPreInv)
 mulGenMat = [a0, 1]
 lagrangeMultiplierVector = matPostInv@mulGenMat
-weightOutput, cost = Adam(cost_use, grad_use, portfolioWeights, niters)
-optimalWeightsPerhaps = lagrangeMultiplierVector[0]*np.linalg.inv(covariance)@rateOfReturnVector
-optimalWeightsPerhaps += lagrangeMultiplierVector[1]*np.linalg.inv(covariance)@np.ones(rateOfReturnVector.size)
+#weightOutput, cost = Adam(cost_use, grad_use, portfolioWeights, niters)
+#optimalWeightsPerhaps = 
+part1 = np.linalg.pinv(covariance)@rateOfReturnVector
+part1 *= lagrangeMultiplierVector[0]
+part2 = np.linalg.pinv(covariance)@np.ones(rateOfReturnVector.size)
+part2 *= lagrangeMultiplierVector[1]
+optimalWeights = part1 + part2
+
+print(np.ones(optimalWeights.size)@optimalWeights)
+print(optimalWeights@rateOfReturnVector)
 #startData = data.loc[data['date'] == '2019-02-20']
 #justSymbolsEndDate = endData['symbol']
 #justSymbolsStartDate = startData['symbol']
