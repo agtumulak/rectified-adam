@@ -131,32 +131,45 @@ def RAdam(cost_func,grad_func,theta_0,niters,alpha,beta1 = None,beta2 = None, ep
     
     return theta_vec,cost_out        
 
-def cost_use(weights):
-    
-    return (1/2)*(weights.T@covariance@weights) - lagrangeMultiplierVector[0]*(a0 - weights@rateOfReturnVector) - lagrangeMultiplierVector[1]*(1 - weights@np.ones(weights.size))
-def grad_use(weights):
-    return covariance@weights
 
 
 
-#df = pd.read_csv('history_60d.csv')
-#df = df.loc[~df.duplicated(subset=['date', 'symbol']),:] # drop duplicates
-#df = df.pivot(index='date', columns='symbol', values='close')
-#print(df)
 
+df = pd.read_csv('history_60d.csv')
+df = df.loc[~df.duplicated(subset=['date', 'symbol']),:] # drop duplicates
+stockClose = pd.DataFrame.to_numpy(df.pivot(index='date', columns='symbol', values='close'))[:,:40]
+stockOpen = pd.DataFrame.to_numpy(df.pivot(index='date', columns='symbol', values='open'))[:,:40]
+dailyReturns = 100*(stockClose - stockOpen)/stockOpen
+averageDailyReturns = (np.ones(42)@dailyReturns/42)
+deviationMatrix = dailyReturns - averageDailyReturns
+covarianceMatrix = np.zeros((40, 40)).astype(float)
+for x in range(40):
+    for y in range(40):
+        xVal = deviationMatrix[:,x]
+        yVal = deviationMatrix[:,y]
+        covarianceMatrix[x, y] = np.dot(xVal, yVal)/42
+        #covarianceMatrix[x, y] /= np.sqrt((np.dot(xVal, xVal)/42))
+        #covarianceMatrix[x, y] /= np.sqrt((np.dot(yVal, yVal)/42))
 data = pd.read_csv("history_60d.csv")
 endData = data.loc[data['date'] == '2019-04-18']
 closeData = endData[['close']]
-closeData = pd.DataFrame.to_numpy(endData.get("close"))
-openData = pd.DataFrame.to_numpy(endData.get("open"))
+closeData = pd.DataFrame.to_numpy(endData.get("close"))#[:7900]
+openData = pd.DataFrame.to_numpy(endData.get("open"))#[:7900]
+
+#endDataAve = data.loc[data['date'] == '2019-03-18']
+#closeDataAve = endDataAve[['close']]
+#closeDataAve = pd.DataFrame.to_numpy(endDataAve.get("close"))[:7900]
+#fakeMeanVec = (100*(closeData - closeDataAve)/closeDataAve)
 #percent rate of return
-rateOfReturnVector = 100*(closeData - openData)/openData
-rateOfReturnVector = rateOfReturnVector[:5]
-mean = np.dot(np.ones(rateOfReturnVector.size),rateOfReturnVector)/rateOfReturnVector.size
+#rateOfReturnVector = 100*(closeData - openData)/openData
+#rateOfReturnVector = rateOfReturnVector[:10]
+#mean = np.dot(np.ones(rateOfReturnVector.size),rateOfReturnVector)/rateOfReturnVector.size
 #covariance = np.matmul((rateOfReturnVector - mean).T, (rateOfReturnVector - mean))/mean
-c = rateOfReturnVector - mean #THIS IS THE WRONG MEAN. WILL NEED TO DEFINE A LOOP TO MAKE A NEW VECTOR TO GO THROUGH TIME SERIES AND FIND AVERAGE RETURN
+#c = rateOfReturnVector - mean #THIS IS THE WRONG MEAN. WILL NEED TO DEFINE A LOOP TO MAKE A NEW VECTOR TO GO THROUGH TIME SERIES AND FIND AVERAGE RETURN
 ##cmean = np.dot(np.ones(c.size),c)/c
-covariance = np.outer(c, c)/rateOfReturnVector.size
+#covariance = np.outer(c, c)/rateOfReturnVector.size
+rateOfReturnVector = averageDailyReturns
+covariance = covarianceMatrix
 portfolioWeights = np.ones(rateOfReturnVector.size)/rateOfReturnVector.size
 #portfolioWeights[.05, .05, .05, .05, .05, .05, .2, .05, .05, .4]
 #lossFunction = (1/2)*(portfolioWeights.T@covariance@portfolioWeights)
@@ -175,25 +188,53 @@ y = y['x']
 print(np.ones(portfolioWeights.size)@y)
 print(y@rateOfReturnVector)
 
-a = rateOfReturnVector.T@np.linalg.pinv(covariance)@rateOfReturnVector
-b = rateOfReturnVector.T@np.linalg.pinv(covariance)@np.ones(rateOfReturnVector.size)
-cc = np.ones(rateOfReturnVector.size).T@np.linalg.pinv(covariance)@np.ones(rateOfReturnVector.size)
+a = rateOfReturnVector.T@np.linalg.inv(covariance)@rateOfReturnVector
+b = rateOfReturnVector.T@np.linalg.inv(covariance)@np.ones(rateOfReturnVector.size)
+cc = np.ones(rateOfReturnVector.size).T@np.linalg.inv(covariance)@np.ones(rateOfReturnVector.size)
 matPreInv = np.arange(4).astype(float)
 matPreInv = [a, b, b, cc]
 matPreInv = np.reshape(matPreInv, (2, 2))
-matPostInv = np.linalg.pinv(matPreInv)
+matPostInv = np.linalg.inv(matPreInv)
 mulGenMat = [a0, 1]
 lagrangeMultiplierVector = matPostInv@mulGenMat
 #weightOutput, cost = Adam(cost_use, grad_use, portfolioWeights, niters)
 #optimalWeightsPerhaps = 
-part1 = np.linalg.pinv(covariance)@rateOfReturnVector
+part1 = np.linalg.inv(covariance)@rateOfReturnVector
 part1 *= lagrangeMultiplierVector[0]
-part2 = np.linalg.pinv(covariance)@np.ones(rateOfReturnVector.size)
+part2 = np.linalg.inv(covariance)@np.ones(rateOfReturnVector.size)
 part2 *= lagrangeMultiplierVector[1]
 optimalWeights = part1 + part2
 
 print(np.ones(optimalWeights.size)@optimalWeights)
 print(optimalWeights@rateOfReturnVector)
+def loss2(weights):
+    #returnVal = 0
+    originalComponent = (1/2)*(weights.T@covariance@weights)
+    l1Component = (a0 - weights@rateOfReturnVector)
+    l1Component *= lagrangeMultiplierVector[0]
+    l2Component = (1 - weights@np.ones(weights.size))
+    l2Component *= lagrangeMultiplierVector[1]
+    return (originalComponent + l1Component + l2Component)
+    #return (1/2)*(weights.T@covariance@weights) + lagrangeMultiplierVector[0]*(a0 - weights@rateOfReturnVector) + lagrangeMultiplierVector[1]*(1 - weights@np.ones(weights.size))
+
+portfolioWeights2 = np.ones(rateOfReturnVector.size)/rateOfReturnVector.size
+h = sci.minimize(loss2,portfolioWeights2)
+h = h['x']
+print(np.ones(h.size)@h)
+print(h@rateOfReturnVector)
+#portfolioWeights3 = np.ones(rateOfReturnVector.size)/rateOfReturnVector.size
+#niters = 5000
+#def cost_use(weights):
+#    
+#    return (1/2)*(weights.T@covariance@weights) + lagrangeMultiplierVector[0]*(a0 - weights@rateOfReturnVector) + lagrangeMultiplierVector[1]*(1 - weights@np.ones(weights.size))
+#def grad_use(weights):
+#    return covariance@weights
+#w, cost = Adam(cost_use, grad_use, portfolioWeights3, niters)
+#def loss2(weights):
+#    return (1/2)*(weights.T@covariance@weights) - lagrangeMultiplierVector[0]*(a0 - weights@rateOfReturnVector) - lagrangeMultiplierVector[1]*(1 - weights@np.ones(weights.size))
+#print(np.ones(w.size)@w)
+#print(w@rateOfReturnVector)
+
 #startData = data.loc[data['date'] == '2019-02-20']
 #justSymbolsEndDate = endData['symbol']
 #justSymbolsStartDate = startData['symbol']
