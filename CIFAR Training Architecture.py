@@ -1,4 +1,5 @@
 from keras.layers import Dense, Conv2D, MaxPooling2D, Activation, Flatten, Dropout, GaussianNoise
+from keras.initializers import Zeros, Ones, Constant, RandomNormal
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.optimizers import Adam, SGD
 from keras.utils import to_categorical
@@ -18,38 +19,47 @@ tf.set_random_seed(2)
 
 
 def createModel(args, opt):
-    numNodes = [9, 18, 36, 72, 144, 288, 572]
+    numNodes = [8, 16, 32, 64, 128, 256, 512]
     k = (args.kernel_size * 2) + 1
+    w8s = {"Zeros": Zeros(), "Ones": Ones(), "Constant": Constant(value=0.2),
+           "RandNormal": RandomNormal(mean=0.0, stddev=0.05, seed=0)}
 
     model = Sequential()
     model.add(GaussianNoise(args.gauss_noise, input_shape=(32, 32, 3)))
-    model.add(Conv2D(filters=numNodes[0], kernel_size=(k, k), padding='same'))      # Convolution 1
-    model.add(Activation('relu'))                                                   #   ReLU 1
-    model.add(Conv2D(filters=numNodes[1], kernel_size=(k, k), padding='same'))      # Convlution 2
-    model.add(Activation('relu'))                                                   #   ReLU 2
-    model.add(Dropout(args.dropout_conv))                                           #       Dropout 1
-    model.add(MaxPooling2D(pool_size=2))                                            #       Max Pooling 1
-                                                                                    #
-    model.add(Conv2D(filters=numNodes[2], kernel_size=(k, k), padding='same'))      # Convolution 3
-    model.add(Activation('relu'))                                                   #   ReLU 3
-    model.add(Conv2D(filters=numNodes[3], kernel_size=(k, k), padding='same'))      # Convolution 4
-    model.add(Activation('relu'))                                                   #   ReLU 4
-    model.add(Dropout(args.dropout_conv))                                           #       Dropout 2
-    model.add(MaxPooling2D(pool_size=2))                                            #       Max Pooling 2
-                                                                                    #
-    model.add(Conv2D(filters=numNodes[4], kernel_size=(k, k), padding='same'))      # Convolution 5
-    model.add(Activation('relu'))                                                   #   ReLU 5
-    model.add(Conv2D(filters=numNodes[5], kernel_size=(k, k), padding='same'))      # Convolution 6
-    model.add(Activation('relu'))                                                   #   ReLU 6
-    model.add(Dropout(args.dropout_conv))                                           #       Dropout 3
-    model.add(MaxPooling2D(pool_size=2))                                            #       Max Pooling 3
-                                                                                    #
-    model.add(Flatten())                                                            #       Flatten
-    model.add(Dense(numNodes[6]))                                                   #       Dense 1 (FC)
-    model.add(Activation('relu'))                                                   #       ReLU 8
-    model.add(Dropout(args.dropout_dense))                                          #       Dropout 4
-    model.add(Dense(100, activation='softmax'))                                     #       Dense 2 (FC)
-                                                                                    #
+    model.add(Conv2D(filters=numNodes[0], kernel_size=(k, k), padding='same',
+                     kernel_initializer=w8s[args.w8s], bias_initializer=w8s[args.w8s]))             # Convolution 1
+    model.add(Activation('relu'))                                                                   #   ReLU 1
+    model.add(Conv2D(filters=numNodes[1], kernel_size=(k, k), padding='same',                       #
+                     kernel_initializer=w8s[args.w8s], bias_initializer=w8s[args.w8s]))             # Convlution 2
+    model.add(Activation('relu'))                                                                   #   ReLU 2
+    model.add(Dropout(args.dropout_conv))                                                           #       Dropout 1
+    model.add(MaxPooling2D(pool_size=2))                                                            #       Max Pooling 1
+                                                                                                    #
+    model.add(Conv2D(filters=numNodes[2], kernel_size=(k, k), padding='same',                       #
+                     kernel_initializer=w8s[args.w8s], bias_initializer=w8s[args.w8s]))             # Convolution 3
+    model.add(Activation('relu'))                                                                   #   ReLU 3
+    model.add(Conv2D(filters=numNodes[3], kernel_size=(k, k), padding='same',                       #
+                     kernel_initializer=w8s[args.w8s], bias_initializer=w8s[args.w8s]))             # Convolution 4
+    model.add(Activation('relu'))                                                                   #   ReLU 4
+    model.add(Dropout(args.dropout_conv))                                                           #       Dropout 2
+    model.add(MaxPooling2D(pool_size=2))                                                            #       Max Pooling 2
+                                                                                                    #
+    model.add(Conv2D(filters=numNodes[4], kernel_size=(k, k), padding='same',                       #
+                     kernel_initializer=w8s[args.w8s], bias_initializer=w8s[args.w8s]))             # Convolution 5
+    model.add(Activation('relu'))                                                                   #   ReLU 5
+    model.add(Conv2D(filters=numNodes[5], kernel_size=(k, k), padding='same',                       #
+                     kernel_initializer=w8s[args.w8s], bias_initializer=w8s[args.w8s]))             # Convolution 6
+    model.add(Activation('relu'))                                                                   #   ReLU 6
+    model.add(Dropout(args.dropout_conv))                                                           #       Dropout 3
+    model.add(MaxPooling2D(pool_size=2))                                                            #       Max Pooling 3
+                                                                                                    #
+    model.add(Flatten())                                                                            #       Flatten
+    model.add(Dense(numNodes[6], kernel_initializer=w8s[args.w8s], bias_initializer=w8s[args.w8s])) #       Dense 1 (FC)
+    model.add(Activation('relu'))                                                                   #       ReLU 8
+    model.add(Dropout(args.dropout_dense))                                                          #       Dropout 4
+    model.add(Dense(100, activation='softmax',                                                      #
+                    kernel_initializer=w8s[args.w8s], bias_initializer=w8s[args.w8s]))              #       Dense 2 (FC)
+                                                                                                    #
     #print(model.summary())
     print("Model has {} paramters".format(model.count_params()))
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
@@ -147,20 +157,30 @@ def train(args):
     print('Training Accuracy:\n', train_acc)
     print('Validation Accuracy:\n', val_acc)
 
+    plt.figure(1)
     plt.style.use("ggplot")
-
-    plt.xlabel("Epoch #")
-    plt.ylabel("Loss/Accuracy")
-    plt.legend(("RAdam Train", "Adam Train", "SGD Train", "RAdam Validation", "Adam Validation", "SGD Validation"), loc="upper right")
-    plt.savefig(trainPath + "loss.jpg")
-
-    plt.figure(3)
-    plt.plot(train_acc)
-    plt.plot(val_acc)
-    plt.xlabel("Epoch #")
-    plt.ylabel("Loss/Accuracy")
-    plt.legend(("RAdam Train", "Adam Train", "SGD Train", "RAdam Validation", "Adam Validation", "SGD Validation"), loc="lower right")
+    plt.plot(train_acc[:,0], '-r')
+    plt.plot(val_acc[:, 0], '--r')
+    plt.plot(train_acc[:,1], '-g')
+    plt.plot(val_acc[:, 1], '--g')
+    plt.plot(train_acc[:,2], '-m')
+    plt.plot(val_acc[:, 2], '--m')
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.legend(("RAdam Train", "RAdam Validation", "Adam Train", "Adam Validation","SGD Train", "SGD Validation"), loc="upper left")
     plt.savefig(trainPath + "accuracy.jpg")
+
+    plt.figure(2)
+    plt.plot(train_loss[:, 0], '-r')
+    plt.plot(val_loss[:, 0], '--r')
+    plt.plot(train_loss[:, 1], '-g')
+    plt.plot(val_loss[:, 1], '--g')
+    plt.plot(train_loss[:, 2], '-m')
+    plt.plot(val_loss[:, 2], '--m')
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend(("RAdam Train", "RAdam Validation", "Adam Train", "Adam Validation", "SGD Train", "SGD Validation"), loc="upper right")
+    plt.savefig(trainPath + "loss.jpg")
 
     plt.show()
     ###########################################################
@@ -170,32 +190,33 @@ def getAccuracy(preds, testF, testC, optName):
     fineCount, coarseCount, top3Count = 0, 0, 0
     map = labelMap()
     for idx, p in enumerate(preds):
-        print(np.argmax(p), testF[idx,:][0], np.argsort(p)[-3:][::-1])
-        if np.argmax(p) == np.argmax(testF[idx,:]):
+        #print(np.argmax(p), testF[idx,:][0], np.argsort(p)[-3:][::-1])
+        if np.argmax(p) == testF[idx,:][0]:
             fineCount += 1
+        if testF[idx, :][0] in np.argsort(p)[-3:]:
+            top3Count += 1
         if map[np.argmax(p)] == testC[idx]:
             coarseCount += 1
-        if testF[idx,:][0] in np.argsort(p)[-3:]:
-            top3Count += 1
 
     fineAcc = fineCount / totalCount
-    coarseAcc = coarseCount / totalCount
     top3Acc = top3Count / totalCount
+    coarseAcc = coarseCount / totalCount
     print(" ----- {} accuracy on Fine Labels: {}%".format(optName, np.round(fineAcc * 100, decimals=2)))
-    print(" ----- {} accuracy on Coarse Labels: {}%".format(optName, np.round(coarseAcc * 100, decimals=2)))
     print(" ----- {} Top 3 accuracy on Fine Labels: {}%".format(optName, np.round(top3Acc * 100, decimals=2)))
+    print(" ----- {} accuracy on Coarse Labels: {}%".format(optName, np.round(coarseAcc * 100, decimals=2)))
     print('\n')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-e', '--epochs',        type=int,    default=100,             help='Max number of epochs')
-    parser.add_argument('-b', '--batch-size',    type=int,    default=64,              help='Number of images per batch.')
-    parser.add_argument('-l', '--learning-rate', type=float,  default=0.000015,        help='Learning rate for RAdam optimizer.')
-    parser.add_argument('-c', '--dropout-conv',  type=float,  default=0.5,             help='Dropout rate applied after Conv layers. Range: 0-0.15')
-    parser.add_argument('-d', '--dropout-dense', type=float,  default=0.4,             help='Dropout rate applied after Dense layer. Range: 0.1-0.3')
-    parser.add_argument('-g', '--gauss-noise',   type=float,  default=0.15,            help='Amount of gaussian noise applied to input image.')
-    parser.add_argument('-k', '--kernel-size',   type=int,    default=1,               help='Actual Kernel Size = (kernel_size * 2) + 1. Range: 1-3')
+    parser.add_argument('-e', '--epochs',        type=int,    default=5,              help='Max number of epochs')
+    parser.add_argument('-b', '--batch-size',    type=int,    default=64,             help='Number of images per batch.')
+    parser.add_argument('-l', '--learning-rate', type=float,  default=0.004,          help='Learning rate for RAdam optimizer.')
+    parser.add_argument('-c', '--dropout-conv',  type=float,  default=0.3,             help='Dropout rate applied after Conv layers. Range: 0-0.15')
+    parser.add_argument('-d', '--dropout-dense', type=float,  default=0.3,             help='Dropout rate applied after Dense layer. Range: 0.1-0.3')
+    parser.add_argument('-g', '--gauss-noise',   type=float,  default=0.1,            help='Amount of gaussian noise applied to input image.')
+    parser.add_argument('-k', '--kernel-size',   type=int,    default=2,               help='Actual Kernel Size = (kernel_size * 2) + 1. Range: 1-3')
+    parser.add_argument('-w', '--w8s',           type=str,    default="RandNormal",    help='Defines way weights will be initialized')
     parser.add_argument('-p', '--save-dir',      type=str,    default="/home/ubuntu/", help='Directory to save model file and history plot')
 
     (args, _) = parser.parse_known_args()
