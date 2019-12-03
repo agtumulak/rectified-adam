@@ -1,91 +1,54 @@
-"""Custom optimizer classes.
-"""
-from __future__ import absolute_import, division, print_function
+import tensorflow as tf
 
-import keras.backend as K
-from keras.optimizers import Optimizer
-from keras.legacy import interfaces
+class RectifiedAdam(tf.keras.optimizers.Optimizer):
+    def __init__(self, learning_rate=0.001, beta_1=0.9, beta_2=0.999):
+        super().__init__("RectifiedAdam")
+        self._set_hyper('beta_1', beta_1)
+        self._set_hyper('beta_2', beta_2)
+        self._set_hyper('learning_rate', learning_rate)
+        self._set_hyper('decay', self._initial_decay)
 
+    def _create_slots(self, var_list):
+        for var in var_list:
+            self.add_slot(var, 'm')
+        for var in var_list:
+            self.add_slot(var, 'v')
 
-class RAdam(Optimizer):
-    """Rectified Adam optimizer.
+    def _resource_apply_dense(self, grad, var):
+        dtype = var.dtype.base_dtype
+        lr = self._decayed_lr(dtype)
+        m = self.get_slot(var, 'm')
+        v = self.get_slot(var, 'v')
+        beta_1 = self._get_hyper('beta_1', dtype)
+        beta_2 = self._get_hyper('beta_2', dtype)
+        t = tf.cast(self.iterations + 1, dtype)
+        beta_1_pow = tf.pow(beta_1, t)
+        beta_2_pow = tf.pow(beta_2, t)
 
-    Default parameters follow those provided in the original paper.
+        rho_inf = 2. / (1. - beta_2) - 1.
+        rho_t = rho_inf - 2. * t * beta_2_pow / (1.0 - beta_2_pow)
 
-    # Arguments
-        learning_rate: float >= 0. Learning rate.
-        beta_1: float, 0 < beta < 1. Generally close to 1.
-        beta_2: float, 0 < beta < 1. Generally close to 1.
+        m = m.assign(beta_1 * m + (1. - beta_1) * grad)
+        m_hat = m / (1. - beta_1_pow)
 
-    # References
-        - [On the Variance of the Adaptive Learning Rate and Beyond](
-           https://arxiv.org/pdf/1908.03265.pdf)
-    """
+        r = tf.sqrt(
+                (rho_t - 4.) / (rho_inf - 4.)
+              * (rho_t - 2.) / (rho_inf - 2.)
+              * rho_inf / rho_t)
 
-    def __init__(self, learning_rate=0.001, beta_1=0.9, beta_2=0.999, **kwargs):
-        self.epsilon = kwargs.pop('epsilon', K.epsilon())
-        learning_rate = kwargs.pop('lr', learning_rate)
-        super(RAdam, self).__init__(**kwargs)
-        with K.name_scope(self.__class__.__name__):
-            self.iterations = K.variable(0, dtype='int64', name='iterations')
-            self.lr = K.variable(learning_rate, name='learning_rate')
-            self.beta_1 = K.variable(beta_1, name='beta_1')
-            self.beta_2 = K.variable(beta_2, name='beta_2')
+        v = v.assign(beta_2 * v + (1. - beta_2) * tf.square(grad))
+        v_hat = tf.sqrt(v / (1.0 - beta_2_pow))
+        factor = tf.where(rho_t > 4., r / v_hat, 1.0)
+        var_update = var.assign_sub(lr * factor * m_hat)
 
-    @interfaces.legacy_get_updates_support
-    def get_updates(self, loss, params):
-        grads = self.get_gradients(loss, params)
-        self.updates = [K.update_add(self.iterations, 1)]
+        return tf.group(var_update, m, v)
 
-        lr = self.lr
-        t = K.cast(self.iterations, K.floatx()) + 1
-        lr_t = lr / (1. - K.pow(self.beta_1, t))
-
-        ms = [K.zeros(K.int_shape(p),
-              dtype=K.dtype(p),
-              name='m_' + str(i))
-              for (i, p) in enumerate(params)]
-        vs = [K.zeros(K.int_shape(p),
-              dtype=K.dtype(p),
-              name='v_' + str(i))
-              for (i, p) in enumerate(params)]
-
-        self.weights = [self.iterations] + ms + vs
-
-        for p, g, m, v in zip(params, grads, ms, vs):
-            m_t = (self.beta_1 * m) + (1. - self.beta_1) * g
-            v_t = (self.beta_2 * v) + (1. - self.beta_2) * K.square(g)
-
-            # Compute length of approximated SMA
-            rho_inf = 2. / (1. - self.beta_2) - 1.
-            rho_t = rho_inf - 2. * t * K.pow(self.beta_2, t) / (1. - K.pow(self.beta_2, t))
-
-            # Decide wheter to apply bias-corrected moving second moment
-            if rho_t > 4.:
-                # Variance rectification term
-                r = K.sqrt(
-                        ((rho_t - 4.) * (rho_t - 2.) * rho_inf * (1. - K.pow(self.beta_2, t))
-                      / ((rho_inf - 4.) * (rho_inf - 2.) * rho_t) * v_t))
-            else:
-                r = 1.
-
-            p_t = p - lr_t * r * m_t
-
-            self.updates.append(K.update(m, m_t))
-            self.updates.append(K.update(v, v_t))
-            new_p = p_t
-
-            # Apply constraints.
-            if getattr(p, 'constraint', None) is not None:
-                new_p = p.constraint(new_p)
-
-            self.updates.append(K.update(p, new_p))
-        return self.updates
 
     def get_config(self):
-        config = {'learning_rate': float(K.get_value(self.lr)),
-                  'beta_1': float(K.get_value(self.beta_1)),
-                  'beta_2': float(K.get_value(self.beta_2)),
-                  'epsilon': self.epsilon}
-        base_config = super(RAdam, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config.update({
+            'learning_rate': self._serialize_hyperparameter('learning_rate'),
+            'beta_1': self._serialize_hyperparameter('beta_1'),
+            'beta_2': self._serialize_hyperparameter('beta_2'),
+            'decay': self._serialize_hyperparameter('decay'),})
+        return config
