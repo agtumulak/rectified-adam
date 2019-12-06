@@ -4,36 +4,47 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 
-a0 = np.array(2.2)
-mean = np.array([1, 2, 3])
-cov = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-ones = np.ones(3)
-# a0 = np.array(0.5)
-# mean_df = pd.read_hdf('day_mean.hdf5', 'mean')
-# mean = mean_df.values
-# cov_df = pd.read_hdf('day_cov.hdf5', 'cov')
-# cov = cov_df.values
-# ones = np.ones(len(mean))
+# a0 = np.array(2.2)
+# mean = np.array([1, 2, 3])
+# cov = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+# ones = np.ones(3)
+a0 = np.array(0.001)
+mean_df = pd.read_hdf('day_mean.hdf5', 'mean')
+mean = mean_df.values
+cov_df = pd.read_hdf('day_cov.hdf5', 'cov')
+cov = cov_df.values
+ones = np.ones(len(mean))
+
+small_var_ind = np.argsort(np.diag(cov))[:-100]
+mean = mean[small_var_ind]
+cov = cov[np.ix_(small_var_ind, small_var_ind)]
+ones = np.ones(len(mean))
+
+# n = 500
+# mean = mean[:n]
+# cov = cov[:n,:n]
+# indices = mean_df.index[:n]
+# ones = np.ones(n)
 
 def loss(theta):
-    w, l1, l2 = theta[:-2], theta[-2], theta[-1]
-    f = cov @ w - l1 * mean - l2 * ones
+    w, th1, th2 = theta[:-2], theta[-2], theta[-1]
+    f = cov @ w - np.exp(th1) * mean - np.exp(th2) * ones
     c1 = a0 - w.T @ mean
     c2 = 1. - w.T @ ones
     return f.T @ f + c1 * c1 + c2 * c2
 
 
 def grad_loss(theta, _):
-    w, l1, l2 = theta[:-2], theta[-2], theta[-1]
-    f = cov @ w - l1 * mean - l2 * ones
+    w, th1, th2 = theta[:-2], theta[-2], theta[-1]
+    f = cov @ w - np.exp(th1) * mean - np.exp(th2) * ones
     c1 = a0 - w.T @ mean
     c2 = 1. - w.T @ ones
     # gradient w.r.t. w
     grad_w = 2. * (cov @ f - c1 * mean - c2 * ones)
     # gradient w.r.t. l1
-    grad_l1 = - 2. * mean.T @ f
-    grad_l2 = - 2. * ones.T @ f
-    return np.append(grad_w, [grad_l1, grad_l2])
+    grad_th1 = - 2. * np.exp(th1) * mean.T @ f
+    grad_th2 = - 2. * np.exp(th2) * ones.T @ f
+    return np.append(grad_w, [grad_th1, grad_th2])
 
 
 def SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=0.01):
@@ -173,20 +184,18 @@ if __name__ == '__main__':
     fig, axes = plt.subplots(nrows=1, ncols=3)
     names = ['RAdam', 'Adam', 'SGD']
     optimizers = [RAdam, Adam, SGD]
+    alphas = [0.001, 0.0003, 0.0001, 0.00003]
     for axis, name, optimizer in zip(axes, names, optimizers):
         iters = 10000
         axis.set_title(name)
-        axis.set_ylim(top=2.5, bottom=0)
+        axis.set_ylim(top=100.0, bottom=0)
         axis.set_xlim(left=1, right=iters)
         axis.grid(linewidth=0.1)
-        for alpha in [0.001]:
+        for alpha in alphas:
             theta_0 = np.zeros(len(mean)+2)
             theta_vec, cost_out = optimizer(loss, grad_loss, theta_0, iters, 1, 1, alpha=alpha)
-            print(name)
-            print(theta_vec)
-            # axis.plot(cost_out, label=alpha)
+            axis.plot(cost_out, label=alpha)
         axis.legend()
-
 plt.show()
 import ipdb; ipdb.set_trace()
 pass
