@@ -8,23 +8,29 @@ from matplotlib import pyplot as plt
 # mean = np.array([1, 2, 3])
 # cov = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
 # ones = np.ones(3)
-a0 = np.array(0.001)
+a0 = np.array(0.0005)
 mean_df = pd.read_hdf('day_mean.hdf5', 'mean')
 mean = mean_df.values
 cov_df = pd.read_hdf('day_cov.hdf5', 'cov')
 cov = cov_df.values
 ones = np.ones(len(mean))
 
-small_var_ind = np.argsort(np.diag(cov))[:-100]
-mean = mean[small_var_ind]
-cov = cov[np.ix_(small_var_ind, small_var_ind)]
+indices = np.argsort(np.diag(cov))[:-100]
+mean = mean[indices]
+cov = cov[np.ix_(indices, indices)]
 ones = np.ones(len(mean))
 
-# n = 500
-# mean = mean[:n]
-# cov = cov[:n,:n]
-# indices = mean_df.index[:n]
-# ones = np.ones(n)
+inv_cov = np.linalg.inv(cov)
+a = mean.T @ inv_cov @ mean
+b = mean.T @ inv_cov @ ones
+c = ones.T @ inv_cov @ ones
+constraints = np.linalg.inv(np.array([[a, b], [b, c]])) @ np.array([a0, 1])
+l1_0, l2_0 = constraints[0], constraints[1]
+w_0 = l1_0 * inv_cov @ mean + l2_0 * inv_cov @ ones
+print(l1_0)
+print(l2_0)
+st()
+pass
 
 def loss(theta):
     w, th1, th2 = theta[:-2], theta[-2], theta[-1]
@@ -53,6 +59,10 @@ def SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=0.01):
     cost_out[0] = cost_func(theta_0)
     theta_vec = np.zeros(theta_0.shape)
     theta_vec = theta_0
+    rss_out = np.zeros(niters+1)
+    rss_out[0] = np.linalg.norm(w_0 - theta_0[:-2])
+    l1_out, l2_out = np.zeros(niters+1), np.zeros(niters+1)
+    l1_out[0], l2_out[0] = np.exp(theta_0[-2]), np.exp(theta_0[-1])
     nbatches = len(range(0,ntrain,batch_size))
     for tt in np.arange(1,niters+1):
         i_array = np.random.permutation(ntrain)
@@ -66,7 +76,14 @@ def SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=0.01):
 
         # cost function
         cost_out[tt] = cost_func(theta_vec)
-    return theta_vec,cost_out
+
+        # rss
+        rss_out[tt] = np.linalg.norm(w_0 - theta_vec[:-2])
+
+        # dual variables
+        l1_out[tt], l2_out[tt] = np.exp(theta_vec[-2]), np.exp(theta_vec[-1])
+
+    return theta_vec, cost_out, rss_out, l1_out, l2_out
 
 
 def Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = None,beta1 = None,beta2 = None,epsilon = None):
@@ -90,6 +107,10 @@ def Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = None,beta1
     cost_out[0] = cost_func(theta_0)
     theta_vec = np.zeros(theta_0.shape)
     theta_vec = theta_0
+    rss_out = np.zeros(niters+1)
+    rss_out[0] = np.linalg.norm(w_0 - theta_0[:-2])
+    l1_out, l2_out = np.zeros(niters+1), np.zeros(niters+1)
+    l1_out[0], l2_out[0] = np.exp(theta_0[-2]), np.exp(theta_0[-1])
 
     nbatches = len(range(0,ntrain,batch_size))
     for tt in np.arange(1,niters+1):
@@ -115,7 +136,13 @@ def Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = None,beta1
         # cost function
         cost_out[tt] = cost_func(theta_vec)
 
-    return theta_vec,cost_out
+        # rss
+        rss_out[tt] = np.linalg.norm(w_0 - theta_vec[:-2])
+
+        # dual variables
+        l1_out[tt], l2_out[tt] = np.exp(theta_vec[-2]), np.exp(theta_vec[-1])
+
+    return theta_vec,cost_out, rss_out, l1_out, l2_out
 
 
 def RAdam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = 0.001, beta1 = None,beta2 = None, epsilon = None):
@@ -140,6 +167,12 @@ def RAdam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = 0.001, be
 
     theta_vec = np.zeros(theta_0.shape)
     theta_vec = theta_0
+
+    rss_out = np.zeros(niters+1)
+    rss_out[0] = np.linalg.norm(w_0 - theta_0[:-2])
+
+    l1_out, l2_out = np.zeros(niters+1), np.zeros(niters+1)
+    l1_out[0], l2_out[0] = np.exp(theta_0[-2]), np.exp(theta_0[-1])
 
     rho_infinity = 2/(1-beta2) - 1
 
@@ -178,24 +211,55 @@ def RAdam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = 0.001, be
         # cost function
         cost_out[tt] = cost_func(theta_vec)
 
-    return theta_vec,cost_out
+        # rss
+        rss_out[tt] = np.linalg.norm(w_0 - theta_vec[:-2])
+
+        # dual variables
+        l1_out[tt], l2_out[tt] = np.exp(theta_vec[-2]), np.exp(theta_vec[-1])
+
+    return theta_vec,cost_out, rss_out, l1_out, l2_out
 
 if __name__ == '__main__':
-    fig, axes = plt.subplots(nrows=1, ncols=3)
+    fig, axes = plt.subplots(nrows=4, ncols=3, sharex=True, figsize=(10,8))
     names = ['RAdam', 'Adam', 'SGD']
     optimizers = [RAdam, Adam, SGD]
-    alphas = [0.001, 0.0003, 0.0001, 0.00003]
-    for axis, name, optimizer in zip(axes, names, optimizers):
-        iters = 10000
-        axis.set_title(name)
-        axis.set_ylim(top=100.0, bottom=0)
-        axis.set_xlim(left=1, right=iters)
-        axis.grid(linewidth=0.1)
+    alphas = [0.003, 0.001, 0.0003]
+    for col, (rss_axis, l1_axis, l2_axis, loss_axis, name, optimizer) in enumerate(zip(
+            axes[0], axes[1], axes[2], axes[3], names, optimizers)):
+        iters = 50000
+        if col == 0:
+            rss_axis.set_ylabel(r'$|| w_{t} - w^{*} ||_{2}$')
+            l1_axis.set_ylabel(r'$\lambda_{1}$')
+            l2_axis.set_ylabel(r'$\lambda_{2}$')
+            loss_axis.set_ylabel('Loss')
+        rss_axis.set_title(name)
+        rss_axis.set_ylim(top=2.0, bottom=0)
+        rss_axis.set_xlim(left=1, right=iters)
+        rss_axis.grid(linewidth=0.1)
+        l1_axis.grid(linewidth=0.1)
+        l1_axis.set_ylim(top=0.1, bottom=-0.1)
+        l2_axis.grid(linewidth=0.1)
+        l2_axis.set_ylim(top=0.1, bottom=-0.1)
+        loss_axis.set_ylim(top=1.0, bottom=0.0)
+        loss_axis.set_xlim(left=1, right=iters)
+        loss_axis.grid(linewidth=0.1)
+        loss_axis.set_xlabel('Epoch')
         for alpha in alphas:
-            theta_0 = np.zeros(len(mean)+2)
-            theta_vec, cost_out = optimizer(loss, grad_loss, theta_0, iters, 1, 1, alpha=alpha)
-            axis.plot(cost_out, label=alpha)
-        axis.legend()
-plt.show()
-import ipdb; ipdb.set_trace()
-pass
+            theta_0 = np.ones(len(mean)+2) / len(mean)
+            theta_0[-1] = np.log(0.1)
+            theta_0[-2] = np.log(0.1)
+            theta_vec, cost_out, rss, l1, l2 = optimizer(loss, grad_loss, theta_0, iters, 1, 1, alpha=alpha)
+            rss_axis.plot(rss, label=alpha, linewidth=0.2)
+            l1_axis.plot(l1, label=alpha, linewidth=0.2)
+            l1_axis.plot(np.full(len(l1), l1_0), color='k', linestyle=':', linewidth=0.2)
+            l2_axis.plot(l2, label=alpha, linewidth=0.2)
+            l2_axis.plot(np.full(len(l2), l2_0), color='k', linestyle=':', linewidth=0.2)
+            loss_axis.plot(cost_out, label=alpha, linewidth=0.2)
+            weights = theta_vec[:-2]
+            print(np.exp(theta_vec[-2]), np.exp(theta_vec[-1]), weights.sum(), weights.T @ mean)
+        rss_axis.legend()
+        l1_axis.legend()
+        l2_axis.legend()
+        loss_axis.legend()
+plt.tight_layout()
+plt.savefig('markowitz.pdf')
