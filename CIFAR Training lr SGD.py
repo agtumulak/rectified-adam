@@ -200,7 +200,7 @@ def getAccuracy(preds, testF, testC):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-e', '--epochs',        type=int,    default=60,               help='Max number of epochs')
+    parser.add_argument('-e', '--epochs',        type=int,    default=60,              help='Max number of epochs')
     parser.add_argument('-b', '--batch-size',    type=int,    default=64,              help='Number of images per batch.')
     parser.add_argument('-l', '--learning-rate', type=float,  default=0.001,           help='Learning rate for optimizer.')
     parser.add_argument('-c', '--dropout-conv',  type=float,  default=0.3,             help='Dropout rate applied after Conv layers. Range: 0-0.15')
