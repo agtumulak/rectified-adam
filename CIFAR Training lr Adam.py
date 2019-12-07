@@ -21,7 +21,7 @@ tf.set_random_seed(2)
 def createModel(args, r):
     numNodes = [8, 16, 32, 64, 128, 256, 512]
     k = (args.kernel_size * 2) + 1
-    w8s = {"Zeros": Zeros(), "Ones": Ones(), "Constant": Constant(value=0.2),
+    w8s = {"Zeros": Zeros(), "Ones": Ones(), "Constant": Constant(value=0.25),
            "RandNormal": RandomNormal(mean=0.0, stddev=0.05, seed=0)}
 
     model = Sequential()
@@ -200,7 +200,7 @@ def getAccuracy(preds, testF, testC):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-e', '--epochs',        type=int,    default=60,               help='Max number of epochs')
+    parser.add_argument('-e', '--epochs',        type=int,    default=60,              help='Max number of epochs')
     parser.add_argument('-b', '--batch-size',    type=int,    default=64,              help='Number of images per batch.')
     parser.add_argument('-l', '--learning-rate', type=float,  default=0.001,           help='Learning rate for optimizer.')
     parser.add_argument('-c', '--dropout-conv',  type=float,  default=0.3,             help='Dropout rate applied after Conv layers. Range: 0-0.15')
