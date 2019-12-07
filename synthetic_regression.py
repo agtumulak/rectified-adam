@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[6]:
+# In[2]:
 
 
 import numpy as np
@@ -11,29 +11,29 @@ import time
 from sklearn.datasets.samples_generator import make_regression
 
 
-# In[48]:
+# In[3]:
 
 
 ntrain = 2000
 ntest = 1000
 batch_size = 128
 X,y =  make_regression(n_samples=ntrain+ntest, n_features=500, random_state=0, noise = 1)
-Xtrain = X[:ntrain,:].T
-Xtest = X[ntrain:,:].T
+Xtrain = np.vstack([np.ones((ntrain)),X[:ntrain,:].T])
+Xtest = np.vstack([np.ones((ntest)),X[ntrain:,:].T])
 ytrain = y[:ntrain]
 ytest = y[ntrain:]
 
 wLS = np.linalg.inv(Xtrain.dot(Xtrain.T)).dot(Xtrain.dot(ytrain))
 
 
-# In[56]:
+# In[4]:
 
 
 def test_MSE(weights):
     return (1/ytest.shape[0])*(1/2)*np.linalg.norm(Xtest.T.dot(weights) - ytest)**2
 
 
-# In[57]:
+# In[5]:
 
 
 # Adam
@@ -79,6 +79,7 @@ def Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = None,beta1
     theta_vec = np.zeros(theta_0.shape)
     theta_vec = theta_0
     
+    np.random.seed(0)
     nbatches = len(range(0,ntrain,batch_size))
     for tt in np.arange(1,niters+1):
         i_array = np.random.permutation(ntrain)
@@ -107,7 +108,7 @@ def Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = None,beta1
     return theta_vec,cost_out,mse_out     
 
 
-# In[58]:
+# In[6]:
 
 
 # RAdam
@@ -151,6 +152,7 @@ def RAdam(cost_func,grad_func,theta_0,niters,alpha,ntrain,batch_size,beta1 = Non
     
     rho_infinity = 2/(1-beta2) - 1
     
+    np.random.seed(0)
     nbatches = len(range(0,ntrain,batch_size))
     for tt in np.arange(1,niters+1):
         i_array = np.random.permutation(ntrain)
@@ -190,7 +192,7 @@ def RAdam(cost_func,grad_func,theta_0,niters,alpha,ntrain,batch_size,beta1 = Non
     return theta_vec,cost_out,mse_out
 
 
-# In[59]:
+# In[7]:
 
 
 # normal SGD
@@ -208,6 +210,7 @@ def SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = None):
     theta_vec = np.zeros(theta_0.shape)
     theta_vec = theta_0
     
+    np.random.seed(0)
     nbatches = len(range(0,ntrain,batch_size))
     for tt in np.arange(1,niters+1):
         i_array = np.random.permutation(ntrain)
@@ -226,15 +229,15 @@ def SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = None):
     return theta_vec,cost_out,mse_out        
 
 
-# In[60]:
+# In[8]:
 
 
 # adam / radam parameters
-alpha_start = 0.01
-alpha_start_2 = .05
-alpha_start_3 = .001
-alpha_start_4 = .003
-alpha_start_5 = .005
+alpha_start = 0.1 # .01
+alpha_start_2 = .03 # .05
+alpha_start_3 = .01 # .001
+alpha_start_4 = .005 # .003
+alpha_start_5 = .003 # .005
 decrease_cond = False
 
 if decrease_cond:
@@ -257,14 +260,14 @@ radam_alph_4 = np.concatenate([alpha_start_4*np.ones((third_iter+extra_iters)), 
 radam_alph_5 = np.concatenate([alpha_start_5*np.ones((third_iter+extra_iters)),                             dmid*alpha_start_5*np.ones((third_iter)),                             dend*alpha_start_5*np.ones((third_iter))])
 
 
-# In[61]:
+# In[9]:
 
 
 def cost_func(weights):
     return (1/2)*np.linalg.norm(Xtrain.T.dot(weights) - ytrain)**2
 
 
-# In[62]:
+# In[10]:
 
 
 def grad_func(weights,batch_inds):
@@ -272,7 +275,7 @@ def grad_func(weights,batch_inds):
 # radam can blow up if step size isn't small enough?
 
 
-# In[63]:
+# In[11]:
 
 
 # run iters
@@ -283,7 +286,7 @@ a_w_4,a_c_4,a_mse_4 = Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,
 a_w_5,a_c_5,a_mse_5 = Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=alpha_start_5)
 
 
-# In[64]:
+# In[12]:
 
 
 r_w_1,r_c_1,r_mse_1 = RAdam(cost_func,grad_func,theta_0,niters,radam_alph,ntrain,batch_size)
@@ -293,7 +296,7 @@ r_w_4,r_c_4,r_mse_4 = RAdam(cost_func,grad_func,theta_0,niters,radam_alph_4,ntra
 r_w_5,r_c_5,r_mse_5 = RAdam(cost_func,grad_func,theta_0,niters,radam_alph_5,ntrain,batch_size)
 
 
-# In[65]:
+# In[13]:
 
 
 s_w_1,s_c_1,s_mse_1 = SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=alpha_start)
@@ -303,24 +306,34 @@ s_w_4,s_c_4,s_mse_4 = SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,a
 s_w_5,s_c_5,s_mse_5 = SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=alpha_start_5)
 
 
-# In[66]:
+# In[29]:
 
 
-print(max(abs(a_w_1 - wLS)))
-print(max(abs(r_w_1 - wLS)))
-print(max(abs(s_w_1 - wLS)))
+print(alpha_start,np.linalg.norm(a_w_1 - wLS),np.linalg.norm(r_w_1 - wLS),np.linalg.norm(s_w_1 - wLS))
+print()
+print(alpha_start_2,np.linalg.norm(a_w_2 - wLS),np.linalg.norm(r_w_2 - wLS),np.linalg.norm(s_w_2 - wLS))
+print()
+print(alpha_start_3,np.linalg.norm(a_w_3 - wLS),np.linalg.norm(r_w_3 - wLS),np.linalg.norm(s_w_3 - wLS))
+print()
+print(alpha_start_4,np.linalg.norm(a_w_4 - wLS),np.linalg.norm(r_w_4 - wLS),np.linalg.norm(s_w_4 - wLS))
+print()
+print(alpha_start_5,np.linalg.norm(a_w_5 - wLS),np.linalg.norm(r_w_5 - wLS),np.linalg.norm(s_w_5 - wLS))
 
 
-# In[67]:
+# In[15]:
 
 
-plt.plot(a_c_1)
-plt.plot(r_c_1)
-plt.plot(s_c_1)
+plt.plot(a_c_2,label='adam')
+plt.plot(r_c_2,label='radam')
+plt.plot(s_c_2,label='sgd')
+plt.xlabel('epoch')
+plt.ylabel('cost')
+plt.title('cost vs epoch for α = {}'.format(alpha_start_2))
+plt.legend()
 plt.show()
 
 
-# In[69]:
+# In[16]:
 
 
 print(a_c_1[-1],r_c_1[-1],s_c_1[-1])
@@ -331,24 +344,98 @@ print(a_mse_4[-1],r_mse_4[-1],s_mse_4[-1])
 print(a_mse_5[-1],r_mse_5[-1],s_mse_5[-1])
 
 
-# In[70]:
+# In[17]:
 
 
-plt.plot(r_c_1)
-plt.plot(r_c_2)
-plt.plot(r_c_3)
-plt.plot(r_c_4)
-plt.plot(r_c_5)
+plt.plot(r_c_1,label='α = {}'.format(alpha_start))
+plt.plot(r_c_2,label='α = {}'.format(alpha_start_2))
+plt.plot(r_c_3,label='α = {}'.format(alpha_start_3))
+plt.plot(r_c_4,label='α = {}'.format(alpha_start_4))
+plt.plot(r_c_5,label='α = {}'.format(alpha_start_5))
+plt.legend()
+plt.xlabel('epoch')
+plt.ylabel('cost')
+plt.title('RAdam cost vs epoch')
 plt.show()
 
 
-# In[71]:
+# In[18]:
 
 
-plt.plot(a_c_1)
-plt.plot(a_c_2)
-plt.plot(a_c_3)
-plt.plot(a_c_4)
-plt.plot(a_c_5)
+plt.plot(a_c_1,label='α = {}'.format(alpha_start))
+plt.plot(a_c_2,label='α = {}'.format(alpha_start_2))
+plt.plot(a_c_3,label='α = {}'.format(alpha_start_3))
+plt.plot(a_c_4,label='α = {}'.format(alpha_start_4))
+plt.plot(a_c_5,label='α = {}'.format(alpha_start_5))
+plt.legend(loc='best')
+plt.xlabel('epoch')
+plt.ylabel('cost')
+plt.title('Adam cost vs epoch')
 plt.show()
+
+
+# In[28]:
+
+
+plt.plot(a_mse_1,label='α = {}'.format(alpha_start))
+plt.plot(a_mse_2,label='α = {}'.format(alpha_start_2))
+plt.plot(a_mse_3,label='α = {}'.format(alpha_start_3))
+plt.plot(a_mse_4,label='α = {}'.format(alpha_start_4))
+plt.plot(a_mse_5,label='α = {}'.format(alpha_start_5))
+plt.legend(loc='best')
+plt.xlabel('epoch')
+plt.ylabel('MSE')
+plt.title('Adam MSE vs epoch')
+plt.show()
+
+
+# In[19]:
+
+
+plt.plot(r_mse_1,label='α = {}'.format(alpha_start))
+plt.plot(r_mse_2,label='α = {}'.format(alpha_start_2))
+plt.plot(r_mse_3,label='α = {}'.format(alpha_start_3))
+plt.plot(r_mse_4,label='α = {}'.format(alpha_start_4))
+plt.plot(r_mse_5,label='α = {}'.format(alpha_start_5))
+plt.legend()
+plt.xlabel('epoch')
+plt.ylabel('MSE')
+plt.title('RAdam MSE vs epoch')
+plt.show()
+
+
+# In[20]:
+
+
+plt.plot(s_c_1,label='α = {}'.format(alpha_start))
+plt.plot(s_c_2,label='α = {}'.format(alpha_start_2))
+plt.plot(s_c_3,label='α = {}'.format(alpha_start_3))
+plt.plot(s_c_4,label='α = {}'.format(alpha_start_4))
+plt.plot(s_c_5,label='α = {}'.format(alpha_start_5))
+plt.legend()
+plt.xlabel('epoch')
+plt.ylabel('cost')
+plt.title('SGD cost vs epoch')
+plt.show()
+
+
+# In[21]:
+
+
+plt.plot(s_mse_1,label='α = {}'.format(alpha_start))
+plt.plot(s_mse_2,label='α = {}'.format(alpha_start_2))
+plt.plot(s_mse_3,label='α = {}'.format(alpha_start_3))
+plt.plot(s_mse_4,label='α = {}'.format(alpha_start_4))
+plt.plot(s_mse_5,label='α = {}'.format(alpha_start_5))
+plt.legend()
+plt.xlabel('epoch')
+plt.ylabel('MSE')
+plt.title('SGD MSE vs epoch')
+plt.show()
+
+
+# In[27]:
+
+
+s_mse_5[-1]
 

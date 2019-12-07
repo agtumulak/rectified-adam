@@ -1,64 +1,93 @@
 
 # coding: utf-8
 
-# In[56]:
+# In[6]:
 
 
 import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 import time
+from sklearn.datasets.samples_generator import make_classification
 
 
-# In[150]:
+# In[7]:
 
 
-# make synthetic data
-def f_x_1(x):
-    return x**2*(x-6)*(x-7)
-
-
-# In[151]:
-
-
-# synthetic train and test
-ntrain = 5000
-batch_size = 256
+ntrain = 2000
 ntest = 1000
+batch_size = 128
+X,y =  make_classification(n_samples=ntrain+ntest, n_features=500, random_state=0)
+y[y==0] = -1
+Xtrain = X[:ntrain,:].T
+Xtest = X[ntrain:,:].T
+ytrain = y[:ntrain]
+ytest = y[ntrain:]
 
-noise_mean = 0
-noise_sd_1 = 1
-noise_sd_2 = 10
-x_vec = np.random.normal(noise_mean,noise_sd_1,ntrain+ntest)
-x2_vec = x_vec**2
-x3_vec = x_vec**3
-x4_vec = x_vec**4
-fx_vec = f_x_1(x_vec) # true value (used to plot)
-
-
-y_vec = fx_vec + np.random.normal(noise_mean,noise_sd_2,x_vec.shape[0]) # add gaussian
-
-X_Train_mat = np.vstack([np.ones((1,ntrain)),x_vec[:ntrain].T,x2_vec[:ntrain].T,x3_vec[:ntrain].T,x4_vec[:ntrain].T])
-X_Test_mat = np.vstack([np.ones((1,ntest)),x_vec[ntrain:].T,x2_vec[ntrain:].T,x3_vec[ntrain:].T,x4_vec[ntrain:].T])
-
-y_train = y_vec[:ntrain]
-y_test = y_vec[ntrain:]
-
-x_train = x_vec[:ntrain]
-x_test = x_vec[ntrain:]
-
-fx_train = fx_vec[:ntrain]
-fx_test = fx_vec[ntrain:]
+wLS = np.linalg.inv(Xtrain.dot(Xtrain.T)).dot(Xtrain.dot(ytrain))
 
 
-# In[152]:
+# In[8]:
 
 
-def test_MSE(weights):
-    return (1/y_test.shape[0])*(1/2)*np.linalg.norm(X_Test_mat.T.dot(weights) - y_test)**2
+def test_accuracy(weights):
+    output_labels = np.sign(Xtest.T.dot(weights))
+    numcorrect = np.sum(output_labels == ytest)/np.shape(ytest)[0]
+    return numcorrect
 
 
-# In[153]:
+# In[9]:
+
+
+print(test_accuracy(wLS))
+
+
+# In[10]:
+
+
+def sigmoid(x): # function for calculating exp(x)/(1+exp(x))
+    z = np.exp(x)
+    ans = z/(1+z)
+    if np.isnan(ans): # used to make sure that really large abs(x) do not give nan answer
+        if x > 0:
+            return 1
+        else:
+            return 0
+    else:
+        return ans
+
+
+# In[11]:
+
+
+def grad_log(theta,batch_inds): # compute gradient for given theta
+    regularize = 10
+    grad = np.zeros((np.shape(Xtrain)[0]))
+    regvec = 2*regularize*theta
+
+    for aa in batch_inds:
+        grad -= (ytrain[aa]*sigmoid(-ytrain[aa]*theta.T.dot(Xtrain[:,aa])))*Xtrain[:,aa]
+
+    grad += regvec
+    return grad
+
+
+# In[12]:
+
+
+def evaluate_cost_function(theta): # function to evaluate cost function at given theta
+    regularize = 10
+    temp = 0
+    
+    normterm = regularize*(theta.T.dot(theta))
+
+    for aa in range(0,ntrain):
+        temp += np.log(1+np.exp(-ytrain[aa]*theta.T.dot(Xtrain[:,aa])))
+
+    return temp+normterm
+
+
+# In[13]:
 
 
 # Adam
@@ -98,12 +127,13 @@ def Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = None,beta1
     cost_out = np.zeros(niters+1)
     cost_out[0] = cost_func(theta_0)
     
-    mse_out = np.zeros(niters+1)
-    mse_out[0] = test_MSE(theta_0)
+    accuracy_out = np.zeros(niters+1)
+    accuracy_out[0] = test_accuracy(theta_0)
     
     theta_vec = np.zeros(theta_0.shape)
     theta_vec = theta_0
     
+    np.random.seed(0)
     nbatches = len(range(0,ntrain,batch_size))
     for tt in np.arange(1,niters+1):
         i_array = np.random.permutation(ntrain)
@@ -127,12 +157,12 @@ def Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = None,beta1
 
         # cost function
         cost_out[tt] = cost_func(theta_vec)
-        mse_out[tt] = test_MSE(theta_vec)
+        accuracy_out[tt] = test_accuracy(theta_vec)
     
-    return theta_vec,cost_out,mse_out     
+    return theta_vec,cost_out,accuracy_out     
 
 
-# In[154]:
+# In[14]:
 
 
 # RAdam
@@ -167,15 +197,16 @@ def RAdam(cost_func,grad_func,theta_0,niters,alpha,ntrain,batch_size,beta1 = Non
     bias_correct_v = np.zeros(theta_0.shape)
     
     cost_out = np.zeros(niters+1)
-    mse_out = np.zeros(niters+1)
+    accuracy_out = np.zeros(niters+1)
     cost_out[0] = cost_func(theta_0)
-    mse_out[0] = test_MSE(theta_0)
+    accuracy_out[0] = test_accuracy(theta_0)
     
     theta_vec = np.zeros(theta_0.shape)
     theta_vec = theta_0
     
     rho_infinity = 2/(1-beta2) - 1
     
+    np.random.seed(0)
     nbatches = len(range(0,ntrain,batch_size))
     for tt in np.arange(1,niters+1):
         i_array = np.random.permutation(ntrain)
@@ -210,12 +241,12 @@ def RAdam(cost_func,grad_func,theta_0,niters,alpha,ntrain,batch_size,beta1 = Non
 
         # cost function
         cost_out[tt] = cost_func(theta_vec)
-        mse_out[tt] = test_MSE(theta_vec)
+        accuracy_out[tt] = test_accuracy(theta_vec)
     
-    return theta_vec,cost_out,mse_out
+    return theta_vec,cost_out,accuracy_out
 
 
-# In[155]:
+# In[15]:
 
 
 # normal SGD
@@ -228,11 +259,12 @@ def SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = None):
     # initial values
     cost_out = np.zeros(niters+1)
     cost_out[0] = cost_func(theta_0)
-    mse_out = np.zeros(niters+1)
-    mse_out[0] = test_MSE(theta_0)
+    accuracy_out = np.zeros(niters+1)
+    accuracy_out[0] = test_accuracy(theta_0)
     theta_vec = np.zeros(theta_0.shape)
     theta_vec = theta_0
     
+    np.random.seed(0)
     nbatches = len(range(0,ntrain,batch_size))
     for tt in np.arange(1,niters+1):
         i_array = np.random.permutation(ntrain)
@@ -246,12 +278,12 @@ def SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha = None):
 
         # cost function
         cost_out[tt] = cost_func(theta_vec)
-        mse_out[tt] = test_MSE(theta_vec)
+        accuracy_out[tt] = test_accuracy(theta_vec)
     
-    return theta_vec,cost_out,mse_out        
+    return theta_vec,cost_out,accuracy_out        
 
 
-# In[156]:
+# In[16]:
 
 
 # adam / radam parameters
@@ -271,8 +303,8 @@ else:
 
 #theta_0 = np.zeros((X_Train_mat.shape[0]))
 xxx = 0.01
-theta_0 = xxx*np.ones((X_Train_mat.shape[0]))
-niters = 1000
+theta_0 = xxx*np.ones((Xtrain.shape[0]))
+niters = 200
 third_iter = np.int(np.floor(niters/3))
 extra_iters = np.int(niters - third_iter*3)
 radam_alph = np.concatenate([alpha_start*np.ones((third_iter+extra_iters)),                             dmid*alpha_start*np.ones((third_iter)),                             dend*alpha_start*np.ones((third_iter))])
@@ -282,144 +314,154 @@ radam_alph_4 = np.concatenate([alpha_start_4*np.ones((third_iter+extra_iters)), 
 radam_alph_5 = np.concatenate([alpha_start_5*np.ones((third_iter+extra_iters)),                             dmid*alpha_start_5*np.ones((third_iter)),                             dend*alpha_start_5*np.ones((third_iter))])
 
 
-# In[157]:
-
-
-def cost_func(weights):
-    return (1/2)*np.linalg.norm(X_Train_mat.T.dot(weights) - y_train)**2
-
-
-# In[158]:
-
-
-def grad_func(weights,batch_inds):
-    return (1/len(batch_inds))*X_Train_mat[:,batch_inds].dot(X_Train_mat[:,batch_inds].T.dot(weights) - y_train[batch_inds])
-# radam can blow up if step size isn't small enough?
-
-
-# In[159]:
+# In[17]:
 
 
 # run iters
-a_w_1,a_c_1,a_mse_1 = Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=alpha_start)
-a_w_2,a_c_2,a_mse_2 = Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=alpha_start_2)
-a_w_3,a_c_3,a_mse_3 = Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=alpha_start_3)
-a_w_4,a_c_4,a_mse_4 = Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=alpha_start_4)
-a_w_5,a_c_5,a_mse_5 = Adam(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=alpha_start_5)
+a_w_1,a_c_1,a_mse_1 = Adam(evaluate_cost_function,grad_log,theta_0,niters,ntrain,batch_size,alpha=alpha_start)
+a_w_3,a_c_3,a_mse_3 = Adam(evaluate_cost_function,grad_log,theta_0,niters,ntrain,batch_size,alpha=alpha_start_3)
+a_w_4,a_c_4,a_mse_4 = Adam(evaluate_cost_function,grad_log,theta_0,niters,ntrain,batch_size,alpha=alpha_start_4)
+a_w_5,a_c_5,a_mse_5 = Adam(evaluate_cost_function,grad_log,theta_0,niters,ntrain,batch_size,alpha=alpha_start_5)
 
 
-# In[160]:
+# In[18]:
 
 
-r_w_1,r_c_1,r_mse_1 = RAdam(cost_func,grad_func,theta_0,niters,radam_alph,ntrain,batch_size)
-r_w_2,r_c_2,r_mse_2 = RAdam(cost_func,grad_func,theta_0,niters,radam_alph_2,ntrain,batch_size)
-r_w_3,r_c_3,r_mse_3 = RAdam(cost_func,grad_func,theta_0,niters,radam_alph_3,ntrain,batch_size)
-r_w_4,r_c_4,r_mse_4 = RAdam(cost_func,grad_func,theta_0,niters,radam_alph_4,ntrain,batch_size)
-r_w_5,r_c_5,r_mse_5 = RAdam(cost_func,grad_func,theta_0,niters,radam_alph_5,ntrain,batch_size)
+r_w_1,r_c_1,r_mse_1 = RAdam(evaluate_cost_function,grad_log,theta_0,niters,radam_alph,ntrain,batch_size)
+r_w_3,r_c_3,r_mse_3 = RAdam(evaluate_cost_function,grad_log,theta_0,niters,radam_alph_3,ntrain,batch_size)
+r_w_4,r_c_4,r_mse_4 = RAdam(evaluate_cost_function,grad_log,theta_0,niters,radam_alph_4,ntrain,batch_size)
+r_w_5,r_c_5,r_mse_5 = RAdam(evaluate_cost_function,grad_log,theta_0,niters,radam_alph_5,ntrain,batch_size)
 
 
-# In[161]:
+# In[19]:
 
 
-s_w_1,s_c_1,s_mse_1 = SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=alpha_start)
-s_w_2,s_c_2,s_mse_2 = SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=alpha_start_2)
-s_w_3,s_c_3,s_mse_3 = SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=alpha_start_3)
-s_w_4,s_c_4,s_mse_4 = SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=alpha_start_4)
-s_w_5,s_c_5,s_mse_5 = SGD(cost_func,grad_func,theta_0,niters,ntrain,batch_size,alpha=alpha_start_5)
+s_w_1,s_c_1,s_mse_1 = SGD(evaluate_cost_function,grad_log,theta_0,niters,ntrain,batch_size,alpha=alpha_start)
+s_w_3,s_c_3,s_mse_3 = SGD(evaluate_cost_function,grad_log,theta_0,niters,ntrain,batch_size,alpha=alpha_start_3)
+s_w_4,s_c_4,s_mse_4 = SGD(evaluate_cost_function,grad_log,theta_0,niters,ntrain,batch_size,alpha=alpha_start_4)
+s_w_5,s_c_5,s_mse_5 = SGD(evaluate_cost_function,grad_log,theta_0,niters,ntrain,batch_size,alpha=alpha_start_5)
 
 
-# In[162]:
+# In[20]:
 
 
-print(a_w_1)
-print(r_w_1)
-print(s_w_1)
+print(max(abs(a_w_1 - wLS)))
+print(max(abs(r_w_1 - wLS)))
+print(max(abs(s_w_1 - wLS)))
 
 
-# In[129]:
+# In[21]:
 
 
-plt.scatter(x_train,X_Train_mat.T.dot(a_w_1))
-plt.scatter(x_train,fx_train)
-plt.scatter(x_train,y_train)
+plt.plot(a_c_1,label='adam')
+plt.plot(r_c_1,label='radam')
+plt.plot(s_c_1,label='sgd')
+plt.xlabel('epoch')
+plt.ylabel('cost')
+plt.title('cost vs epoch for α = {}'.format(alpha_start))
+plt.legend()
 plt.show()
 
 
-# In[130]:
+# In[32]:
 
 
-plt.scatter(x_train,X_Train_mat.T.dot(r_w_1))
-plt.scatter(x_train,fx_train)
-plt.scatter(x_train,y_train)
+print(a_c_1[-1],r_c_1[-1],s_c_1[-1])
+print(alpha_start,a_mse_1[-1],r_mse_1[-1],s_mse_1[-1])
+print(alpha_start_3,a_mse_3[-1],r_mse_3[-1],s_mse_3[-1])
+print(alpha_start_4,a_mse_4[-1],r_mse_4[-1],s_mse_4[-1])
+print(alpha_start_5,a_mse_5[-1],r_mse_5[-1],s_mse_5[-1])
+
+
+# In[23]:
+
+
+plt.plot(r_c_1,label='α = {}'.format(alpha_start))
+#plt.plot(r_c_2,label='α = {}'.format(alpha_start_2))
+plt.plot(r_c_3,label='α = {}'.format(alpha_start_3))
+plt.plot(r_c_4,label='α = {}'.format(alpha_start_4))
+plt.plot(r_c_5,label='α = {}'.format(alpha_start_5))
+plt.xlabel('epoch')
+plt.ylabel('cost')
+plt.title('RAdam cost vs epoch')
+plt.legend()
 plt.show()
 
 
-# In[131]:
+# In[24]:
 
 
-plt.scatter(x_train,X_Train_mat.T.dot(s_w_1))
-plt.scatter(x_train,fx_train)
-plt.scatter(x_train,y_train)
+plt.plot(a_c_1,label='α = {}'.format(alpha_start))
+#plt.plot(a_c_2,label='α = {}'.format(alpha_start_2))
+plt.plot(a_c_3,label='α = {}'.format(alpha_start_3))
+plt.plot(a_c_4,label='α = {}'.format(alpha_start_4))
+plt.plot(a_c_5,label='α = {}'.format(alpha_start_5))
+plt.legend(loc='best')
+plt.xlabel('epoch')
+plt.ylabel('cost')
+plt.title('Adam cost vs epoch')
 plt.show()
 
 
-# In[132]:
+# In[25]:
 
 
-plt.plot(a_c_1)
-plt.plot(r_c_1)
-plt.plot(s_c_1)
+plt.plot(s_c_1,label='α = {}'.format(alpha_start))
+#plt.plot(a_c_2,label='α = {}'.format(alpha_start_2))
+plt.plot(s_c_3,label='α = {}'.format(alpha_start_3))
+plt.plot(s_c_4,label='α = {}'.format(alpha_start_4))
+plt.plot(s_c_5,label='α = {}'.format(alpha_start_5))
+plt.legend(loc='best')
+plt.xlabel('epoch')
+plt.ylabel('cost')
+plt.title('SGD cost vs epoch')
 plt.show()
 
 
-# In[134]:
+# In[26]:
 
 
-print(a_mse_1[-1],r_mse_1[-1],s_mse_1[-1])
-print(a_mse_2[-1],r_mse_2[-1],s_mse_2[-1])
-print(a_mse_3[-1],r_mse_3[-1],s_mse_3[-1])
-print(a_mse_4[-1],r_mse_4[-1],s_mse_4[-1])
-print(a_mse_5[-1],r_mse_5[-1],s_mse_5[-1])
-
-
-# In[111]:
-
-
-print(a_c_1[0:10])
-print(r_c_1[0:10])
-
-
-# In[107]:
-
-
-# radam can blow up if step size is too big in first terms
-# does not appear to be robust in terms of learning rate
-
-
-# In[148]:
-
-
-plt.plot(r_c_1)
-plt.plot(r_c_2)
-plt.plot(r_c_3)
-plt.plot(r_c_4)
-plt.plot(r_c_5)
+plt.plot(r_mse_1,label='α = {}'.format(alpha_start))
+#plt.plot(r_mse_2,label='α = {}'.format(alpha_start_2))
+plt.plot(r_mse_3,label='α = {}'.format(alpha_start_3))
+plt.plot(r_mse_4,label='α = {}'.format(alpha_start_4))
+plt.plot(r_mse_5,label='α = {}'.format(alpha_start_5))
+plt.legend()
+plt.xlabel('epoch')
+plt.ylabel('test accuracy')
+plt.title('RAdam test accuracy vs epoch')
+plt.ylim([0.5,1])
 plt.show()
 
 
-# In[149]:
+# In[27]:
 
 
-plt.plot(a_c_1)
-plt.plot(a_c_2)
-plt.plot(a_c_3)
-plt.plot(a_c_4)
-plt.plot(a_c_5)
+plt.plot(a_mse_1,label='α = {}'.format(alpha_start))
+#plt.plot(a_mse_2,label='α = {}'.format(alpha_start_2))
+plt.plot(a_mse_3,label='α = {}'.format(alpha_start_3))
+plt.plot(a_mse_4,label='α = {}'.format(alpha_start_4))
+plt.plot(a_mse_5,label='α = {}'.format(alpha_start_5))
+plt.legend()
+plt.xlabel('epoch')
+plt.ylabel('test accuracy')
+plt.title('Adam test accuracy vs epoch')
+plt.ylim([0.5,1])
 plt.show()
 
 
-# In[164]:
+# In[28]:
 
 
-print(s_c_1[100:110])
+plt.plot(s_mse_1,label='α = {}'.format(alpha_start))
+#plt.plot(r_mse_2,label='α = {}'.format(alpha_start_2))
+plt.plot(s_mse_3,label='α = {}'.format(alpha_start_3))
+plt.plot(s_mse_4,label='α = {}'.format(alpha_start_4))
+plt.plot(s_mse_5,label='α = {}'.format(alpha_start_5))
+plt.legend()
+plt.xlabel('epoch')
+plt.ylabel('test accuracy')
+plt.title('SGD test accuracy vs epoch')
+plt.ylim([0.5,1])
+plt.show()
 
