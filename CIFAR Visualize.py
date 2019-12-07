@@ -1,3 +1,8 @@
+#############################################
+# View images in CIFAR-100 one-by-one       #
+#   -Prints out coarse/fine labels for each #
+#############################################
+
 from keras.datasets import cifar100
 from keras.utils import to_categorical
 import numpy as np
@@ -62,7 +67,7 @@ print("Loading data..." + '\n')
 (trainX, trainF), (testX, testF) = cifar100.load_data(label_mode = 'fine')
 (_, trainC), (_, testC) = cifar100.load_data(label_mode = 'coarse')
 
-dir = "C://Users//Cameron//PycharmProjects//EECS545_Project//CIFAR100//"
+dir = "C://Users//Cameron//PycharmProjects//EECS545_Project//"
 meta = unpickle(dir + "meta")
 fineLabels = meta[b'fine_label_names']
 coarseLabels = meta[b'coarse_label_names']
