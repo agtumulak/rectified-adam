@@ -1,3 +1,8 @@
+########################################################
+# This code run the learning rate comparison test and  #
+# generates plots similar to the one in our report     #
+########################################################
+
 from keras.layers import Dense, Conv2D, MaxPooling2D, Activation, Flatten, Dropout, GaussianNoise
 from keras.initializers import Zeros, Ones, Constant, RandomNormal
 from keras.callbacks import ModelCheckpoint, EarlyStopping
