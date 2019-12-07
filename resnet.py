@@ -1,6 +1,10 @@
 #!/usr/bin/env python
+from ipdb import set_trace as st
 import argparse
+import rectified_adam
+import radam
 import tensorflow as tf
+import tensorflow_addons as tfa
 from os import path
 
 
@@ -98,8 +102,11 @@ def get_dataset():
 
 
 def get_optimizer():
-    return tf.keras.optimizers.SGD(learning_rate=0.1, momentum=0.9)  # He 4.2
+    # return tf.keras.optimizers.SGD(learning_rate=0.1, momentum=0.9)  # He 4.2
     # return tf.keras.optimizers.Adam()
+    # return tfa.optimizers.RectifiedAdam()
+    return radam.RectifiedAdam()
+    # return rectified_adam.RectifiedAdam()
 
 
 def get_scheduler():
@@ -110,12 +117,13 @@ def get_scheduler():
     iterations, and terminate training at 64k iterations
     """
     def schedule(epoch):
+        rate = 0.1
         if epoch >= 123:
-            return 0.001
+            return rate * 0.01
         elif epoch >= 82:
-            return 0.01
+            return rate * 0.1
         else:
-            return 0.1
+            return rate
     return tf.keras.callbacks.LearningRateScheduler(schedule, verbose=1)
 
 
